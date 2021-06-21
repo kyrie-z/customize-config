@@ -1,5 +1,5 @@
-	syntax enable   "语法高亮
-	syntax on
+syntax enable   "语法高亮
+syntax on
 set scrolloff=5 
 filetype on " 侦测文件类型
 set tabstop=4
@@ -20,6 +20,9 @@ set backspace=2 " 使回格键（backspace）正常处理indent, eol, start等
 "搜索逐字符高亮
 set hlsearch
 set incsearch
+"ESC退出高亮
+nnoremap <esc> :noh<CR> 
+nnoremap <esc>^[ <esc>^[
 
 "禁止生成临时文件
 set nobackup
