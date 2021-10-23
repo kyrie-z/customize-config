@@ -1,0 +1,15 @@
+local customize config:
+	ranger --copy-config=rc
+	ranger --copy-config=scope
+
+
+preview image:
+	use ueberzug: 
+		sudo apt install libx11-dev libxtst-dev python3-docopt python3-xlib python3-pil 
+		pip3 install ueberzug (Make sure the executable is in the executable env var,such as /usr/bin !! )
+		Edit ~/.config/ranger/rc.conf "set preview_images true" ,"set preview_images_method ueberzug"
+
+
+use icons:
+	use: https://github.com/alexanderjeurissen/ranger_devicons.git (now use old commit 44dbd2a9cf39e91ad6720dc7db6f386cd0459256)
+	Notes: if icons not working(show block) ,try changing the terminal font, Or download nerd-fonts font package to use.
