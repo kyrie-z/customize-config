@@ -13,3 +13,11 @@ preview image:
 use icons:
 	use: https://github.com/alexanderjeurissen/ranger_devicons.git (now use old commit 44dbd2a9cf39e91ad6720dc7db6f386cd0459256)
 	Notes: if icons not working(show block) ,try changing the terminal font, Or download nerd-fonts font package to use.
+
+code highlight:
+	sudo apt install highlight
+
+
+Custom keys:
+	filter and search: 
+		map f console scout -ftsea%space
