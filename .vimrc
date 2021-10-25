@@ -19,6 +19,8 @@ set backspace=2 " 使回格键（backspace）正常处理indent, eol, start等
 "set whichwrap+=<,>,h,l    "允许跨行
 set linebreak
 
+set encoding=utf8
+set guifont=DroidSansMono_Nerd_Font:h11
 set wildmenu "cmd suggest
 
 "搜索逐字符高亮
@@ -63,6 +65,15 @@ noremap srv <C-w>b<C-w>H
 nnoremap <C-w>] :bn<CR> 
 nnoremap <C-w>[ :bp<CR>
 nnoremap <C-w>- :bd<CR>
+nmap <C-w>1 :b 1<CR>
+nmap <C-w>2 :b 2<CR>
+nmap <C-w>3 :b 3<CR>
+nmap <C-w>4 :b 4<CR>
+nmap <C-w>5 :b 5<CR>
+nmap <C-w>6 :b 6<CR>
+nmap <C-w>7 :b 7<CR>
+nmap <C-w>8 :b 8<CR>
+nmap <C-w>9 :b 9<CR>
 
 " coc.nvim setting
 set updatetime=100
@@ -90,11 +101,10 @@ Plug 'preservim/nerdtree'
 Plug 'vim-airline/vim-airline'
 Plug 'majutsushi/tagbar'
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
+Plug 'ryanoasis/vim-devicons'
+Plug 'bling/vim-bufferline'
+Plug 'tiagofumo/vim-nerdtree-syntax-highlight'
 
-"Plug 'gelguy/wilder.nvim', {'branch': 'vim_support'}
-"" To use Python remote plugin features in Vim, can be skipped
-"Plug 'roxma/nvim-yarp'
-"Plug 'roxma/vim-hug-neovim-rpc'
 call plug#end()
 
 "--------目录树
@@ -103,16 +113,14 @@ map tt :NERDTreeToggle<CR>
 "--------导航栏
 let g:airline#extensions#whitespace#enabled = 0  "取消whitespace显示
 
-"打开tabline
-let g:airline#extensions#tabline#enabled = 1
-let g:airline#extensions#tabline#buffer_nr_show = 1
-
 "--------tagbar
 let g:tagbar_width=35
 let g:tagbar_autofocus=1
 let g:tagbar_right = 1
 nmap <F3> :TagbarToggle<CR>
 
-"--------coc.nvim 补全
+"============coc.nvim
 let g:coc_disable_startup_warning = 1
+
+let g:coc_global_extensions = ['coc-json', 'coc-vimlsp', 'coc-marketplace']
 
