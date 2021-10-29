@@ -23,6 +23,7 @@ set encoding=utf8
 set guifont=DroidSansMono_Nerd_Font:h11
 set wildmenu "cmd suggest
 
+
 "搜索逐字符高亮
 set hlsearch
 set incsearch
@@ -41,7 +42,7 @@ set autowrite           " Automatically save before commands like :next and :mak
 set hidden              " Hide buffers when they are abandoned
 set mouse=a             " Enable mouse usage (all modes)
 set mouse=i
-set paste
+"set paste              " Don't use it , Cause auto-completion not work
 set noexpandtab
 set scrolloff=5 "顶部和底部时保持n行距离
 
@@ -75,7 +76,78 @@ nmap <C-w>7 :b 7<CR>
 nmap <C-w>8 :b 8<CR>
 nmap <C-w>9 :b 9<CR>
 
+
+"--------插件---------
+call plug#begin('~/.vim/plugged')
+Plug 'preservim/nerdtree'
+Plug 'itchyny/lightline.vim'
+Plug 'majutsushi/tagbar'
+Plug 'neoclide/coc.nvim', {'branch': 'release'}
+Plug 'ryanoasis/vim-devicons'
+Plug 'mengelbrecht/lightline-bufferline'
+Plug 'tiagofumo/vim-nerdtree-syntax-highlight'
+Plug 'voldikss/vim-floaterm'
+
+call plug#end()
+
+"--------目录树
+map tt :NERDTreeToggle<CR>
+
+"--------导航栏
+set laststatus=2
+set showtabline=2
+
+let g:lightline = {
+      \ 'colorscheme': 'wombat',
+      \ 'active': {
+      \   'left': [ [ 'mode', 'paste' ], [ 'readonly', 'filename', 'modified' ] ]
+      \ },
+      \ 'tabline': {
+      \   'left': [ ['buffers'] ],
+      \   'right': [ ['close'] ]
+      \ },
+      \ 'component_expand': {
+      \   'buffers': 'lightline#bufferline#buffers'
+      \ },
+      \ 'component_type': {
+      \   'buffers': 'tabsel'
+      \ }
+      \ }
+
+let g:lightline#bufferline#enable_devicons = 1
+let g:lightline#bufferline#show_number = 3
+let g:lightline#bufferline#number_map = {
+\ 0: '₀', 1: '₁', 2: '₂', 3: '₃', 4: '₄',
+\ 5: '₅', 6: '₆', 7: '₇', 8: '₈', 9: '₉'}
+
+"--------tagbar
+let g:tagbar_width=35
+let g:tagbar_autofocus=1
+let g:tagbar_right = 1
+nmap <F3> :TagbarToggle<CR>
+
+
+"-------floaterm
+  let g:floaterm_keymap_prev   = '<C-p>'
+  let g:floaterm_keymap_next    = '<C-n>'
+  let g:floaterm_keymap_new    = '<C-c>'
+  let g:floaterm_keymap_toggle = '<C-h>'
+  let g:floaterm_keymap_kill   = '<C-k>'
+
+"============coc.nvim==============
+let g:coc_disable_startup_warning = 1
+
+let g:coc_global_extensions = ['coc-json', 'coc-vimlsp', 'coc-highlight', 'coc-marketplace', 'coc-go', 'coc-clangd']
+
+let g:markdown_fenced_languages = [
+      \ 'vim',
+      \ 'help',
+	  \ 'go',
+	  \ 'c'
+      \]
+
 " coc.nvim setting
+set cmdheight=2
 set updatetime=100
 set shortmess+=c
 inoremap <silent><expr> <TAB>
@@ -89,38 +161,39 @@ function! s:check_back_space() abort
   return !col || getline('.')[col - 1]  =~# '\s'
 endfunction
 
-inoremap <silent><expr> <c-@> coc#refresh()
+" Make <CR> auto-select the first completion item and notify coc.nvim to
+" format on enter, <cr> could be remapped by other vim plugin
+inoremap <silent><expr> <cr> pumvisible() ? coc#_select_confirm()
+                              \: "\<C-g>u\<CR>\<c-r>=coc#on_enter()\<CR>"
+
+
+" Use `[g` and `]g` to navigate diagnostics
+" Use `:CocDiagnostics` to get all diagnostics of current buffer in location list.
+nmap <silent> [e <Plug>(coc-diagnostic-prev)
+nmap <silent> ]e <Plug>(coc-diagnostic-next)
+
+" GoTo code navigation.
+nmap <silent> gd <Plug>(coc-definition)
+nmap <silent> gy <Plug>(coc-type-definition)
+nmap <silent> gi <Plug>(coc-implementation)
+nmap <silent> gr <Plug>(coc-references)
+
+" Use K to show documentation in preview window.
+nnoremap <silent> K :call <SID>show_documentation()<CR>
+function! s:show_documentation()
+  if (index(['vim','help'], &filetype) >= 0)
+    execute 'h '.expand('<cword>')
+  elseif (coc#rpc#ready())
+    call CocActionAsync('doHover')
+  else
+    execute '!' . &keywordprg . " " . expand('<cword>')
+  endif
+endfunction
+
+" Highlight the symbol and its references when holding the cursor.
 autocmd CursorHold * silent call CocActionAsync('highlight')
 
 
-nmap ts <Plug>(coc-translator-p)
 
-"--------插件---------
-call plug#begin('~/.vim/plugged')
-Plug 'preservim/nerdtree'
-Plug 'vim-airline/vim-airline'
-Plug 'majutsushi/tagbar'
-Plug 'neoclide/coc.nvim', {'branch': 'release'}
-Plug 'ryanoasis/vim-devicons'
-Plug 'bling/vim-bufferline'
-Plug 'tiagofumo/vim-nerdtree-syntax-highlight'
 
-call plug#end()
-
-"--------目录树
-map tt :NERDTreeToggle<CR>
-
-"--------导航栏
-let g:airline#extensions#whitespace#enabled = 0  "取消whitespace显示
-
-"--------tagbar
-let g:tagbar_width=35
-let g:tagbar_autofocus=1
-let g:tagbar_right = 1
-nmap <F3> :TagbarToggle<CR>
-
-"============coc.nvim
-let g:coc_disable_startup_warning = 1
-
-let g:coc_global_extensions = ['coc-json', 'coc-vimlsp', 'coc-marketplace']
 
