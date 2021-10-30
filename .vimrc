@@ -1,7 +1,8 @@
 "================================================= vim set =========================
 
 set scrolloff=5		" leave least line 
-filetype on 		" 侦测文件类型
+filetype plugin on  " 侦测文件类型
+set statusline+=%F  " 显示当前文件绝对路径
 set autoindent 		" 自动缩进（保持上个缩进）
 set tabstop=4 		" 缩进格数
 set expandtab 		" auto convert tabs to spaces 
@@ -32,24 +33,24 @@ set mouse=i
 "set paste              " Don't use it , Cause auto-completion not work
 
 
-
 "=============================================== vim key map ===============
 
 let mapleader = "\<space>"
 
 
 "==  Insert Mode   ==
-
+imap <C-a> <Home>
+imap <C-e> <End>
 
 "==  Visual Mode   ==
-vnoremap y "+y 			" 共享粘贴
-vmap <C-a> <Home> 	" cursor move
+vnoremap y "+y 
+vmap <C-a> <Home>
 vmap <C-e> <End>
 
 
 "==  Command Mode  ==
 set wildmenu 			" 补全以菜单形式显示
-cnoremap <C-a> <Home> 	" cursor move
+cnoremap <C-a> <Home>
 cnoremap <C-e> <End>
 
 
@@ -116,8 +117,8 @@ nnoremap <space> @=((foldclosed(line('.')) < 0) ? 'zc' : 'zo')<CR>
 
 set cindent 	"c/c++自动缩进
 
-map <silent> ;c :s/^/\/\//<CR>:noh<CR>      " 快速注释 
-map <silent> ;u :s/\/\///<CR>:noh<CR>
+"map <silent> cc :s/^/\/\//<CR>:noh<CR>      " 快速注释 
+"map <silent> cu :s/\/\///<CR>:noh<CR>
 
 "================================================= vim plugin =============
 
@@ -131,6 +132,8 @@ Plug 'ryanoasis/vim-devicons'
 Plug 'mengelbrecht/lightline-bufferline'
 Plug 'tiagofumo/vim-nerdtree-syntax-highlight'
 Plug 'voldikss/vim-floaterm'
+Plug 'preservim/nerdcommenter'
+Plug 'jackguo380/vim-lsp-cxx-highlight'
 
 call plug#end()
 
@@ -179,12 +182,14 @@ nmap <F3> :TagbarToggle<CR>
   let g:floaterm_keymap_toggle = '<C-h>'
   let g:floaterm_keymap_kill   = '<C-k>'
 
+"-------- nerd commenter
+let g:NERDSpaceDelims=1 " 注释添加空格
 
 
 "===============================================coc.nvim==============
 
 
-let g:coc_global_extensions = ['coc-json', 'coc-vimlsp', 'coc-highlight', 'coc-marketplace', 'coc-go', 'coc-clangd']
+let g:coc_global_extensions = ['coc-json', 'coc-vimlsp', 'coc-highlight', 'coc-marketplace', 'coc-go']
 let g:coc_disable_startup_warning = 1
 
 
@@ -239,8 +244,11 @@ function! s:show_documentation()
   endif
 endfunction
 
+" Formatting selected code.
+xmap <leader>f  <Plug>(coc-format-selected)
+nmap <leader>f  <Plug>(coc-format-selected)
 
-" Highlight the symbol and its references when holding the cursor.
-"autocmd CursorHold * silent call CocActionAsync('highlight')
-
+" symbols
+nnoremap <silent><nowait> <space>s  :<C-u>CocList -I symbols<cr>
+nnoremap <silent><nowait> <space>o  :<C-u>CocList outline<cr>
 
