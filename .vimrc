@@ -75,8 +75,8 @@ noremap - :vertical resize-5<CR>
 noremap . :res +5<CR>
 noremap , :res -5<CR>
 
-noremap srh <C-w>b<C-w>K 				" 窗口旋转 
-noremap srv <C-w>b<C-w>H
+noremap srh <C-w>b<C-w>K 				" 窗口上下旋转 
+noremap srv <C-w>b<C-w>H        " 窗口左右旋转
 
 nnoremap <C-w>] :bn<CR> 				" 切换Buffer快捷键 
 nnoremap <C-w>[ :bp<CR>
@@ -256,4 +256,11 @@ nmap <leader>f  <Plug>(coc-format-selected)
 " symbols
 nnoremap <silent><nowait> <space>s  :<C-u>CocList -I symbols<cr>
 nnoremap <silent><nowait> <space>o  :<C-u>CocList outline<cr>
+ 
 
+" nerdcommenter
+
+" custom formats
+let g:NERDCustomDelimiters = { 'c': { 'left': '//' } }
+" Allow commenting empty lines
+let g:NERDCommentEmptyLines = 1
