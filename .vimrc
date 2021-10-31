@@ -1,19 +1,20 @@
 "================================================= vim set =========================
 
-set scrolloff=5		" leave least line 
+set scrolloff=5     " leave least line 
 filetype plugin on  " 侦测文件类型
 set statusline+=%F  " 显示当前文件绝对路径
-set autoindent 		" 自动缩进（保持上个缩进）
-set tabstop=4 		" 缩进格数
-set expandtab 		" auto convert tabs to spaces 
-set autoread 		" 打开文件监视
+set autoindent 		  " 自动缩进（保持上个缩进）
+set tabstop=2 		  " 缩进格数
+set expandtab 		  " auto convert tabs to spaces 
+set autoread 		    " 打开文件监视
 set nu
 set relativenumber 	" relative position 相对行号
-set cursorline 		" highlight current line
+set cursorline 		  " highlight current line
 set backspace=indent,eol,start  	" 使回格键（backspace）正常处理indent, eol, start等
 "set whichwrap+=h,l " 允许跨行
-"set linebreak 		" 不会在单词内部折行
+"set linebreak 		  " 不会在单词内部折行
 set encoding=utf8 	" 编码，使汉语正常显示
+set confirm         " 命令行异常确认
 
 "search
 set hlsearch 		" 搜索字符高亮
@@ -140,6 +141,10 @@ call plug#end()
 
 "--------目录树
 map tt :NERDTreeToggle<CR>
+""打开vim时如果没有文件自动打开NERDTree
+autocmd vimenter * if !argc()|NERDTree|endif
+""当NERDTree为剩下的唯一窗口时自动关闭
+autocmd bufenter * if (winnr("$") == 1 && exists("b:NERDTree") && b:NERDTree.isTabTree()) | q | endif
 
 "--------导航栏
 set laststatus=2
