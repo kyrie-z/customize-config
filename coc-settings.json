@@ -19,6 +19,11 @@
         },
         "highlight": { "lsRanges" : true }
       }
-    }
-  }
+    },
+    "golang": {
+      "command": "gopls",
+      "rootPatterns": ["go.mod"],
+      "filetypes": ["go"]
+      }
+   }
 }

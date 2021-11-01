@@ -33,6 +33,9 @@ set mouse=a             " Enable mouse usage (all modes)
 set mouse=i
 "set paste              " Don't use it , Cause auto-completion not work
 
+let &t_TI = ""
+let &t_TE = ""
+
 
 "=============================================== vim key map ===============
 
@@ -135,6 +138,7 @@ Plug 'tiagofumo/vim-nerdtree-syntax-highlight'
 Plug 'voldikss/vim-floaterm'
 Plug 'preservim/nerdcommenter'
 Plug 'jackguo380/vim-lsp-cxx-highlight'
+Plug 'fatih/vim-go', { 'do': ':GoUpdateBinaries' }
 
 call plug#end()
 
@@ -191,10 +195,32 @@ nmap <F3> :TagbarToggle<CR>
 let g:NERDSpaceDelims=1 " 注释添加空格
 
 
+"--------vim-go
+let g:go_fmt_command = 'goimports'
+let g:go_autodetect_gopath = 1
+
+let g:go_doc_popup_window = 1
+
+let g:go_highlight_types = 1
+let g:go_highlight_fields = 1
+let g:go_highlight_functions = 1
+let g:go_highlight_function_calls = 1
+let g:go_highlight_extra_types = 1
+let g:go_highlight_generate_tags = 1
+
+" Open :GoDeclsDir with ctrl-g
+nmap <C-g> :GoDeclsDir<cr>
+imap <C-g> <esc>:<C-u>GoDeclsDir<cr>
+
+augroup go
+  autocmd!
+  autocmd BufNewFile,BufRead *.go setlocal noexpandtab tabstop=4 shiftwidth=4
+augroup END
+
 "===============================================coc.nvim==============
 
 
-let g:coc_global_extensions = ['coc-json', 'coc-vimlsp', 'coc-highlight', 'coc-marketplace', 'coc-go']
+let g:coc_global_extensions = ['coc-json', 'coc-vimlsp', 'coc-highlight', 'coc-marketplace']
 let g:coc_disable_startup_warning = 1
 
 
@@ -264,3 +290,5 @@ nnoremap <silent><nowait> <space>o  :<C-u>CocList outline<cr>
 let g:NERDCustomDelimiters = { 'c': { 'left': '//' } }
 " Allow commenting empty lines
 let g:NERDCommentEmptyLines = 1
+
+
