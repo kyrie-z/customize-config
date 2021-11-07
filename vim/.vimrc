@@ -33,6 +33,7 @@ set mouse=a             " Enable mouse usage (all modes)
 set mouse=i
 "set paste              " Don't use it , Cause auto-completion not work
 
+" 解决vim命令行显示未知符号
 let &t_TI = ""
 let &t_TE = ""
 
@@ -66,7 +67,7 @@ nmap <C-e> $
 nnoremap <esc> :noh<CR> 
 nnoremap <esc>^[ <esc>^[
 
-
+" 显示当前文件路径
 "窗口buffer操作
 map sl :set splitright<CR>:vsplit<CR> 	" 分屏操作
 map sh :set nosplitright<CR>:vsplit<CR>
@@ -114,10 +115,10 @@ colorscheme OceanicNext
 "================================================ code set ===============
 
 "==  Folding ==
-set foldmethod=indent "用缩进表示折叠
+set foldmethod=syntax "用语法表示折叠
 set foldlevelstart=99 "打开文件是默认不折叠代码
-"noremap <silent> <LEADER><LEADER> za
-nnoremap <space> @=((foldclosed(line('.')) < 0) ? 'zc' : 'zo')<CR>
+" 空格折叠
+" nnoremap <space> @=((foldclosed(line('.')) < 0) ? 'zc' : 'zo')<CR>
 
 set cindent 	"c/c++自动缩进
 
@@ -140,6 +141,15 @@ Plug 'preservim/nerdcommenter'
 Plug 'jackguo380/vim-lsp-cxx-highlight'
 Plug 'fatih/vim-go', { 'do': ':GoUpdateBinaries' }
 
+" markdown
+Plug 'godlygeek/tabular'
+Plug 'plasticboy/vim-markdown'
+Plug 'iamcco/markdown-preview.nvim', { 'do': { -> mkdp#util#install() }, 'for': ['markdown', 'vim-plug']} " must run `npm install` in src dir !!
+
+" fzf
+Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
+Plug '~/.fzf'
+Plug 'rking/ag.vim'  "first install ag!!
 call plug#end()
 
 
@@ -185,8 +195,8 @@ nmap <F3> :TagbarToggle<CR>
 
 
 "-------floaterm
-  let g:floaterm_keymap_prev   = '<C-p>'
-  let g:floaterm_keymap_next    = '<C-n>'
+"  let g:floaterm_keymap_prev   = '<C-p>'
+"  let g:floaterm_keymap_next    = '<C-n>'
 "  let g:floaterm_keymap_new    = '<C-c>'
   let g:floaterm_keymap_toggle = '<C-h>'
   let g:floaterm_keymap_kill   = '<C-k>'
@@ -194,6 +204,14 @@ nmap <F3> :TagbarToggle<CR>
 "-------- nerd commenter
 let g:NERDSpaceDelims=1 " 注释添加空格
 
+" custom formats
+let g:NERDCustomDelimiters = { 'c': { 'left': '//' } }
+" Allow commenting empty lines
+let g:NERDCommentEmptyLines = 1
+
+" use ctrl+/ commenting
+let g:NERDCreateDefaultMappings = 0
+nmap <C-_> <plug>NERDCommenterToggle  
 
 "--------vim-go
 let g:go_fmt_command = 'goimports'
@@ -216,6 +234,57 @@ augroup go
   autocmd!
   autocmd BufNewFile,BufRead *.go setlocal noexpandtab tabstop=4 shiftwidth=4
 augroup END
+
+"--------- markdown
+" Toc指令打开index时自动调整窗口大小
+let g:vim_markdown_toc_autofit = 1
+
+"--------- markdown preview
+let g:mkdp_auto_start = 0
+let g:mkdp_auto_close = 1
+let g:mkdp_refresh_slow = 0
+let g:mkdp_command_for_global = 0
+let g:mkdp_open_to_the_world = 0
+let g:mkdp_open_ip = ''
+let g:mkdp_browser = 'google-chrome-stable'
+let g:mkdp_echo_preview_url = 0
+let g:mkdp_browserfunc = ''
+let g:mkdp_preview_options = {
+    \ 'mkit': {},
+    \ 'katex': {},
+    \ 'uml': {},
+    \ 'maid': {},
+    \ 'disable_sync_scroll': 0,
+    \ 'sync_scroll_type': 'middle',
+    \ 'hide_yaml_meta': 1
+    \ }
+let g:mkdp_markdown_css = ''
+let g:mkdp_highlight_css = ''
+let g:mkdp_port = ''
+let g:mkdp_page_title = '「${name}」'
+
+" open browser preview
+nmap <C-m> <Plug>MarkdownPreviewToggle
+
+
+" fzf set
+map \ :FZF --reverse --info=inline /<CR>
+
+function! s:build_quickfix_list(lines)
+  call setqflist(map(copy(a:lines), '{ "filename": v:val }'))
+  copen
+  cc
+endfunction
+                        
+let g:fzf_action = {
+  \ 'ctrl-q': function('s:build_quickfix_list'),
+  \ 'ctrl-t': 'tab split',
+  \ 'ctrl-x': 'split',
+  \ 'ctrl-v': 'vsplit' }
+
+" ag
+let g:ag_prg="/usr/bin/ag --vimgrep"
+let g:ag_working_path_mode="r"
 
 "===============================================coc.nvim==============
 
@@ -283,12 +352,5 @@ nmap <leader>f  <Plug>(coc-format-selected)
 nnoremap <silent><nowait> <space>s  :<C-u>CocList -I symbols<cr>
 nnoremap <silent><nowait> <space>o  :<C-u>CocList outline<cr>
  
-
-" nerdcommenter
-
-" custom formats
-let g:NERDCustomDelimiters = { 'c': { 'left': '//' } }
-" Allow commenting empty lines
-let g:NERDCommentEmptyLines = 1
 
 

@@ -21,3 +21,9 @@ code highlight:
 Custom keys:
 	filter and search: 
 		map f console scout -ftsea%space
+
+
+customize keys:
+  sm -> "mkcd"
+  st -> "touch"
+  s<space> -> "shell"
