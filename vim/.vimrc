@@ -211,7 +211,8 @@ let g:NERDCommentEmptyLines = 1
 
 " use ctrl+/ commenting
 let g:NERDCreateDefaultMappings = 0
-nmap <C-_> <plug>NERDCommenterToggle  
+" nmap <C-_> <plug>NERDCommenterToggle  
+map <C-_> <plug>NERDCommenterToggle  
 
 "--------vim-go
 let g:go_fmt_command = 'goimports'
