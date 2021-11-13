@@ -16,6 +16,10 @@ set backspace=indent,eol,start  	" 使回格键（backspace）正常处理indent
 set encoding=utf8 	" 编码，使汉语正常显示
 set confirm         " 命令行异常确认
 
+set undofile " Maintain undo history between sessions
+" need `mkdir ~/.vim/undodir`
+set undodir=~/.vim/undodir  
+
 "search
 set hlsearch 		" 搜索字符高亮
 set incsearch 		" 跳转到搜索字符
@@ -140,6 +144,7 @@ Plug 'voldikss/vim-floaterm'
 Plug 'preservim/nerdcommenter'
 Plug 'jackguo380/vim-lsp-cxx-highlight'
 Plug 'fatih/vim-go', { 'do': ':GoUpdateBinaries' }
+Plug 'itchyny/vim-cursorword'
 
 " markdown
 Plug 'godlygeek/tabular'
@@ -152,6 +157,10 @@ Plug '~/.fzf'
 Plug 'rking/ag.vim'  "first install ag!!
 call plug#end()
 
+"-------- 代码下划线高亮
+let g:cursorword_highlight = 0
+:highlight CursorWord0 term=underline cterm=underline gui=underline guisp=#ff5f5f
+:highlight CursorWord1 term=underline cterm=underline gui=underline guisp=#ff5f5f
 
 "--------目录树
 map tt :NERDTreeToggle<CR>
@@ -226,6 +235,9 @@ let g:go_highlight_functions = 1
 let g:go_highlight_function_calls = 1
 let g:go_highlight_extra_types = 1
 let g:go_highlight_generate_tags = 1
+let g:go_def_reuse_buffer = 0
+let g:go_def_mapping_enabled = 0  "disable the default mapping of CTRL-] and (`gd`)
+
 
 " Open :GoDeclsDir with ctrl-g
 nmap <C-g> :GoDeclsDir<cr>
@@ -290,7 +302,7 @@ let g:ag_working_path_mode="r"
 "===============================================coc.nvim==============
 
 
-let g:coc_global_extensions = ['coc-json', 'coc-vimlsp', 'coc-highlight', 'coc-marketplace']
+let g:coc_global_extensions = ['coc-json', 'coc-vimlsp', 'coc-marketplace']
 let g:coc_disable_startup_warning = 1
 
 
