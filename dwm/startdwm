@@ -1,0 +1,16 @@
+#!/bin/bash
+
+export XMODIFIERS=@im=fcitx
+export QT_IM_MODULE=fcitx
+export GTK_IM_MODULE=fcitx
+
+export IDENTIFIER=unicode
+fcitx5 -d
+
+dunst &
+
+xrandr  --output HDMI-1 --mode 1920x1080 --rate 120
+xrandr --output HDMI-1 --primary  --above eDP-1
+exec dwm
+
+
