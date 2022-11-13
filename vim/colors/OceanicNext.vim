@@ -26,7 +26,9 @@
   endif
 "}}}
 " {{{ Colors
-  let s:base00 = ['#1b2b34', '235']
+  " let s:base00 = ['#1b2b34', '235']
+  " let s:base00 = ['#252a35', '235']
+  let s:base00   = ['NONE',    'NONE']
   let s:base01 = ['#343d46', '237']
   let s:base02 = ['#4f5b66', '240']
   let s:base03 = ['#65737e', '243']
