@@ -43,6 +43,7 @@ let &t_TE = ""
 
 " ============================== vim key map ==============================
 
+" install vim-athena
 vnoremap y "+y	    " +y 复制到系统粘贴板上
 
 nmap <C-a> <Home>
@@ -115,9 +116,6 @@ nmap <F3> :TagbarToggle<CR>
 
 
 "---------- vim-cursorword
-let g:cursorword_highlight = 0
-let g:cursorword_delay = 0  "禁止同单词移动闪烁
-:highlight CursorWord0 term=underline cterm=underline gui=underline guisp=#ff5f5f
-:highlight CursorWord1 term=underline cterm=underline gui=underline guisp=#ff5f5f
+ let g:cursorword_delay = 0  "禁止同单词移动闪烁
 
 
