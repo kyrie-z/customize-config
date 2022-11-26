@@ -2,7 +2,7 @@
 syntax enable
 set t_Co=256 
 
-set termguicolors
+" set termguicolors
 let g:oceanic_next_terminal_bold = 1
 let g:oceanic_next_terminal_italic = 1
 colorscheme OceanicNext
@@ -33,7 +33,6 @@ nnoremap <esc> :noh<CR>
 nnoremap <esc>^[ <esc>^[
 
 set softtabstop=4   " set tabstop=4    
-set autoindent	    " 缩进与上文自动一致
 
 set encoding=utf-8  
 
