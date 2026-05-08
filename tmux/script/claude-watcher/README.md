@@ -30,11 +30,7 @@ uv pip install textual --target ~/.local/lib/python3.13/site-packages
 ### 2. 创建软链接
 
 ```bash
-# 主脚本
 ln -sf /path/to/claude-watcher/claude_watcher.py ~/.config/tmux/scripts/claude_watcher.py
-
-# 启动脚本
-ln -sf /path/to/claude-watcher/open.sh ~/.config/tmux/scripts/open_claude_watcher.sh
 ```
 
 ### 3. 配置 Claude Code Hooks
@@ -50,7 +46,7 @@ ln -sf /path/to/claude-watcher/open.sh ~/.config/tmux/scripts/open_claude_watche
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ~/.config/tmux/scripts/claude_watcher.py start --pid $PPID --hook SessionStart"
+            "command": "python3 ~/.config/tmux/scripts/claude_watcher.py start --pid $PPID"
           }
         ]
       }
@@ -61,7 +57,7 @@ ln -sf /path/to/claude-watcher/open.sh ~/.config/tmux/scripts/open_claude_watche
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ~/.config/tmux/scripts/claude_watcher.py running --pid $PPID --hook UserPromptSubmit"
+            "command": "python3 ~/.config/tmux/scripts/claude_watcher.py running --pid $PPID"
           }
         ]
       }
@@ -72,7 +68,7 @@ ln -sf /path/to/claude-watcher/open.sh ~/.config/tmux/scripts/open_claude_watche
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ~/.config/tmux/scripts/claude_watcher.py completed --pid $PPID --hook Stop"
+            "command": "python3 ~/.config/tmux/scripts/claude_watcher.py completed --pid $PPID"
           }
         ]
       }
@@ -83,7 +79,7 @@ ln -sf /path/to/claude-watcher/open.sh ~/.config/tmux/scripts/open_claude_watche
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ~/.config/tmux/scripts/claude_watcher.py remove --pid $PPID --hook SessionEnd"
+            "command": "python3 ~/.config/tmux/scripts/claude_watcher.py remove --pid $PPID"
           }
         ]
       }
@@ -98,7 +94,7 @@ ln -sf /path/to/claude-watcher/open.sh ~/.config/tmux/scripts/open_claude_watche
 
 ```tmux
 # prefix + a 打开 TUI
-bind a run-shell "~/.config/tmux/scripts/open_claude_watcher.sh"
+bind a display-popup -E -w 40% -h 40% -T "Claude Watcher" "python3 ~/.config/tmux/scripts/claude_watcher.py tui"
 
 # pane 关闭时清理记录
 set-hook -g pane-died 'run -b "python3 ~/.config/tmux/scripts/claude_watcher.py remove-pane #{pane_id}"'
@@ -164,9 +160,8 @@ python3 ~/.config/tmux/scripts/claude_watcher.py clear
 
 ```
 claude-watcher/
-├── README.md              # 本文档
-├── claude_watcher.py      # 主程序
-└── open.sh                # tmux popup 启动脚本
+├── README.md           # 本文档
+└── claude_watcher.py   # 主程序
 ```
 
 ## 调试

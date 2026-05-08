@@ -90,7 +90,7 @@ def find_pane_by_pid(claude_pid: int) -> Optional[tuple[str, str, str]]:
     return None
 
 
-def get_task_summary(pane_id: str) -> str:
+def get_last_prompt(pane_id: str) -> str:
     """Extract recent user message from pane content as task summary."""
     content = run_tmux("capture-pane", "-t", pane_id, "-p", "-S", "-300")
     if not content:
@@ -115,7 +115,6 @@ def get_task_summary(pane_id: str) -> str:
 
     # Look for user input patterns (Chinese or meaningful text)
     for line in reversed(lines):
-        original_line = line
         line = line.strip()
         if not line or len(line) < 5:
             continue
@@ -191,26 +190,25 @@ def find_session_by_pid(state: dict, claude_pid: int) -> Optional[str]:
 
 
 @with_lock
-def cmd_start(pid: int, hook_name: str = "SessionStart"):
+def cmd_start(pid: int):
     """Register session, mark as idle (waiting for user input)."""
-    log(hook_name, f"start called with pid={pid}")
+    log("SessionStart", f"start called with pid={pid}")
     state = load_state()
 
     location = find_pane_by_pid(pid)
     if not location:
-        log(hook_name, f"ERROR: Could not find pane for PID {pid}")
+        log("SessionStart", f"ERROR: Could not find pane for PID {pid}")
         print("Could not find pane for PID", file=sys.stderr)
         return
 
     session_id, window_id, pane_id = location
     new_key = make_key(session_id, window_id, pane_id)
-    log(hook_name, f"Found location: {new_key}")
+    log("SessionStart", f"Found location: {new_key}")
 
     # Check if PID already exists with different location
     old_key = find_session_by_pid(state, pid)
     if old_key and old_key != new_key:
-        # Location changed, remove old entry
-        log(hook_name, f"Location changed from {old_key} to {new_key}")
+        log("SessionStart", f"Location changed from {old_key} to {new_key}")
         del state["sessions"][old_key]
 
     now = datetime.now().isoformat()
@@ -221,59 +219,71 @@ def cmd_start(pid: int, hook_name: str = "SessionStart"):
             "pane_id": pane_id,
             "claude_pid": pid,
             "status": "idle",
-            "task_summary": get_task_summary(pane_id),
+            "last_prompt": get_last_prompt(pane_id),
             "started_at": now,
             "updated_at": now,
             "turns": 0,
         }
 
     save_state(state)
-    log(hook_name, f"Saved: {new_key}")
+    log("SessionStart", f"Saved: {new_key}")
 
 
 @with_lock
-def cmd_running(pid: int, hook_name: str = "UserPromptSubmit"):
+def cmd_running(pid: int):
     """Mark session as running (agent is working)."""
-    log(hook_name, f"running called with pid={pid}")
+    # Read prompt from stdin (hook passes JSON via stdin)
+    prompt = ""
+    try:
+        if not sys.stdin.isatty():
+            data = json.load(sys.stdin)
+            prompt = data.get("prompt", "")
+            log("UserPromptSubmit", f"Got prompt from stdin: '{prompt[:50]}...'")
+    except Exception as e:
+        log("UserPromptSubmit", f"Failed to read stdin: {e}")
+
+    log("UserPromptSubmit", f"running called with pid={pid}")
     state = load_state()
     key = find_session_by_pid(state, pid)
     if key:
         state["sessions"][key]["status"] = "running"
         state["sessions"][key]["updated_at"] = datetime.now().isoformat()
         state["sessions"][key]["turns"] = state["sessions"][key].get("turns", 0) + 1
+        if prompt:
+            state["sessions"][key]["last_prompt"] = prompt
         save_state(state)
-        log(hook_name, f"Marked {key} as running")
+        log("UserPromptSubmit", f"Marked {key} as running")
     else:
-        log(hook_name, f"WARNING: PID {pid} not found in state")
+        log("UserPromptSubmit", f"WARNING: PID {pid} not found in state")
 
 
 @with_lock
-def cmd_completed(pid: int, hook_name: str = "Stop"):
+def cmd_completed(pid: int):
     """Mark session as completed (task done, waiting for user review)."""
-    log(hook_name, f"completed called with pid={pid}")
+    log("Stop", f"completed called with pid={pid}")
     state = load_state()
     key = find_session_by_pid(state, pid)
     if key:
         state["sessions"][key]["status"] = "completed"
         state["sessions"][key]["updated_at"] = datetime.now().isoformat()
         save_state(state)
-        log(hook_name, f"Marked {key} as completed")
+        log("Stop", f"Marked {key} as completed")
     else:
-        log(hook_name, f"WARNING: PID {pid} not found in state")
+        log("Stop", f"WARNING: PID {pid} not found in state")
 
 
 @with_lock
-def cmd_remove(pid: int, hook_name: str = "SessionEnd"):
+def cmd_remove(pid: int):
     """Remove session record by PID."""
-    log(hook_name, f"remove called with pid={pid}")
+    log("SessionEnd", f"remove called with pid={pid}")
     state = load_state()
     key = find_session_by_pid(state, pid)
     if key:
         del state["sessions"][key]
         save_state(state)
-        log(hook_name, f"Removed: {key}")
+        log("SessionEnd", f"Removed: {key}")
     else:
-        log(hook_name, f"WARNING: PID {pid} not found in state")
+        log("SessionEnd", f"WARNING: PID {pid} not found in state")
 
 
 @with_lock
@@ -305,32 +315,6 @@ def cmd_status():
             parts.append(f"{STATUS_ICONS.get(status, '?')}{count}")
 
     print(" ".join(parts) if parts else "")
-
-
-def cmd_session_icons():
-    """Output session icons for status bar."""
-    state = load_state()
-    # Group by session
-    session_status = {}
-    for key, session in state["sessions"].items():
-        sid = session.get("session_id", "")
-        status = session.get("status", "idle")
-        if sid not in session_status:
-            session_status[sid] = set()
-        session_status[sid].add(status)
-
-    parts = []
-    for sid, statuses in sorted(session_status.items()):
-        # Show most important status
-        if "running" in statuses:
-            icon = STATUS_ICONS["running"]
-        elif "completed" in statuses:
-            icon = STATUS_ICONS["completed"]
-        else:
-            icon = STATUS_ICONS["idle"]
-        parts.append(f"{icon}{sid}")
-
-    print(" ".join(parts))
 
 
 @with_lock
@@ -390,7 +374,6 @@ def cmd_tui():
         from textual.widgets import Header, Footer, Static
         from textual.containers import Container
         from textual.reactive import reactive
-        from textual import events
     except ImportError:
         print("Error: textual not installed. Run: pip install textual", file=sys.stderr)
         sys.exit(1)
@@ -467,7 +450,12 @@ def cmd_tui():
         def refresh_sessions(self):
             self.title = self.get_title()
             state = load_state()
-            self.sessions = list(state["sessions"].items())
+            # Sort by updated_at, most recent first
+            self.sessions = sorted(
+                state["sessions"].items(),
+                key=lambda x: x[1].get("updated_at", ""),
+                reverse=True,
+            )
 
             container = self.query_one("#sessions")
             container.remove_children()
@@ -478,16 +466,21 @@ def cmd_tui():
                 return
 
             for i, (key, session) in enumerate(self.sessions):
-                sid = session.get("session_id", "")
-                wid = session.get("window_id", "")
-                pane_id = session.get("pane_id", "")
+                sid = session.get("session_id", "").lstrip("$")
+                wid = session.get("window_id", "").lstrip("@")
+                pane_id = session.get("pane_id", "").lstrip("%")
 
-                # Get display names
-                session_name = run_tmux("display-message", "-t", sid, "-p", "#{session_name}") or sid
-                window_name = run_tmux("display-message", "-t", wid, "-p", "#{window_name}") or wid
+                # Get names by looking up pane_id in list-panes output
+                raw_pane_id = session.get("pane_id", "")
+                pane_list = run_tmux("list-panes", "-a", "-F", "#{pane_id} #{session_name} #{pane_current_command} #{pane_current_path}")
+                session_name, pane_name, cwd = "?", "?", ""
+                for line in pane_list.split("\n"):
+                    parts = line.strip().split(maxsplit=3)
+                    if len(parts) >= 3 and parts[0] == raw_pane_id:
+                        session_name, pane_name = parts[1], parts[2]
+                        cwd = parts[3] if len(parts) == 4 else ""
+                        break
 
-                # Get current working directory
-                cwd = run_tmux("display-message", "-t", pane_id, "-p", "#{pane_current_path}") or ""
                 if cwd:
                     # Shorten path: show last 2 directories
                     cwd_parts = cwd.split("/")
@@ -497,8 +490,8 @@ def cmd_tui():
 
                 status = session.get("status", "idle")
                 icon = STATUS_ICONS.get(status, "?")
-                # Get fresh summary from pane
-                summary = get_task_summary(pane_id) or session.get("task_summary", "")
+                # Use stored prompt (from hook), fallback to pane parsing
+                summary = session.get("last_prompt", "") or get_last_prompt(raw_pane_id)
                 turns = session.get("turns", 0)
 
                 # Calculate time info
@@ -531,8 +524,13 @@ def cmd_tui():
                 except ValueError:
                     pass
 
+                # Truncate summary to ~40 chars (half of typical terminal width)
+                max_len = 40
+                if len(summary) > max_len:
+                    summary = summary[:max_len] + "..."
+
                 css_class = "session-item selected" if i == self.selected_index else "session-item"
-                text = f"{icon} {session_name}:{window_name}\n   {cwd}\n   {summary}\n   {time_info} · {turns} turns"
+                text = f'{icon} {sid}:{wid}:{pane_id}({pane_name})    {cwd}\n   💬 "{summary}"\n   {time_info} · {turns} turns'
 
                 container.mount(Static(text, classes=css_class))
 
@@ -575,17 +573,14 @@ def main():
     # start command
     p_start = subparsers.add_parser("start", help="Register session (idle)")
     p_start.add_argument("--pid", type=int, required=True, help="Claude process PID")
-    p_start.add_argument("--hook", type=str, default="SessionStart", help="Hook name for logging")
 
     # running command
     p_running = subparsers.add_parser("running", help="Mark as running")
     p_running.add_argument("--pid", type=int, required=True, help="Claude process PID")
-    p_running.add_argument("--hook", type=str, default="UserPromptSubmit", help="Hook name for logging")
 
     # completed command
     p_completed = subparsers.add_parser("completed", help="Mark as completed")
     p_completed.add_argument("--pid", type=int, required=True, help="Claude process PID")
-    p_completed.add_argument("--hook", type=str, default="Stop", help="Hook name for logging")
 
     # remove-pane command
     p_remove = subparsers.add_parser("remove-pane", help="Remove pane record")
@@ -594,11 +589,9 @@ def main():
     # remove command
     p_remove_pid = subparsers.add_parser("remove", help="Remove record by PID")
     p_remove_pid.add_argument("--pid", type=int, required=True, help="Claude process PID")
-    p_remove_pid.add_argument("--hook", type=str, default="SessionEnd", help="Hook name for logging")
 
     # Other commands
     subparsers.add_parser("status", help="Output status bar content")
-    subparsers.add_parser("session-icons", help="Output session icons")
     subparsers.add_parser("list", help="List all sessions")
     subparsers.add_parser("clear", help="Clear all records")
     subparsers.add_parser("clean", help="Clean stale records")
@@ -607,19 +600,17 @@ def main():
     args = parser.parse_args()
 
     if args.command == "start":
-        cmd_start(args.pid, args.hook)
+        cmd_start(args.pid)
     elif args.command == "running":
-        cmd_running(args.pid, args.hook)
+        cmd_running(args.pid)
     elif args.command == "completed":
-        cmd_completed(args.pid, args.hook)
+        cmd_completed(args.pid)
     elif args.command == "remove":
-        cmd_remove(args.pid, args.hook)
+        cmd_remove(args.pid)
     elif args.command == "remove-pane":
         cmd_remove_pane(args.pane_id)
     elif args.command == "status":
         cmd_status()
-    elif args.command == "session-icons":
-        cmd_session_icons()
     elif args.command == "list":
         cmd_list()
     elif args.command == "clear":
