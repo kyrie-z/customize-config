@@ -10,6 +10,39 @@
 - 快速跳转到对应 Claude 会话
 - TUI 界面管理
 
+## 整体架构
+
+### 核心数据流
+
+```
+Claude Code 会话启动 → hook 触发 → 更新状态文件 → TUI 显示
+```
+
+### 关键组件
+
+1. **状态文件** `/tmp/claude-watcher-state.json`
+   - 存储所有会话信息（位置、状态、最后 prompt、轮次等）
+   - 用文件锁防止并发写入冲突
+
+2. **Hook 命令**（被 Claude Code 自动调用）：
+
+   | 命令 | 触发时机 | 状态变化 |
+   |------|----------|----------|
+   | `start` | SessionStart | idle（空闲等待） |
+   | `running` | UserPromptSubmit | running（执行中） |
+   | `completed` | Stop | completed（完成待确认） |
+   | `remove` | SessionEnd | 删除记录 |
+
+3. **如何找到 Claude 在哪个 pane？**
+   - 从 hook 获取 Claude 进程的 PID
+   - 用 `ps -p <pid> -o tty=` 获取进程的 TTY
+   - 遍历 tmux 所有 panes 的 `#{pane_tty}`，找到 TTY 匹配的 pane
+
+4. **TUI 界面**
+   - 每 1 秒自动刷新
+   - 显示：会话位置、任务摘要、状态图标、运行时长
+   - 支持键盘跳转到对应 tmux pane
+
 ## 状态图标
 
 | 图标 | 状态 | 说明 |
@@ -187,8 +220,3 @@ tail -f /tmp/claude-watcher.log
 - Python 3.8+
 - textual (TUI 框架)
 - tmux 3.0+
-
-## TODO
-
-- task_summary 显示不准确
-- py 脚本待删减

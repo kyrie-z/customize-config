@@ -1,39 +1,60 @@
 #!/usr/bin/env python3
-"""Claude Watcher - Track Claude Code sessions in tmux."""
+"""
+Claude Watcher - 在 tmux 中跟踪多个 Claude Code 会话的状态
+
+这个工具通过 Claude Code 的 hooks 系统（SessionStart/UserPromptSubmit/Stop/SessionEnd）
+来追踪每个会话的运行状态（idle/running/completed），并在 TUI 中显示。
+
+状态存储: /tmp/claude-watcher-state.json
+日志文件: /tmp/claude-watcher.log
+"""
 
 import argparse
 import fcntl
 import json
 import os
-import re
 import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-# Paths
-STATE_FILE = Path("/tmp/claude-watcher-state.json")
-LOCK_FILE = Path("/tmp/claude-watcher-state.lock")
-LOG_FILE = Path("/tmp/claude-watcher.log")
+# 文件路径常量
+STATE_FILE = Path("/tmp/claude-watcher-state.json")  # 存储所有会话状态的 JSON 文件
+LOCK_FILE = Path("/tmp/claude-watcher-state.lock")   # 文件锁，防止并发写入冲突
+LOG_FILE = Path("/tmp/claude-watcher.log")           # 调试日志文件
 
-# Status icons
+# 状态对应的显示图标
 STATUS_ICONS = {
-    "running": "🤖",
-    "completed": "✅",
-    "idle": "💤",
+    "running": "🤖",    # 正在执行任务
+    "completed": "✅",  # 任务完成，等待用户确认
+    "idle": "💤",       # 空闲，等待用户输入
 }
 
 
 def log(hook_name: str, message: str):
-    """Write log message with timestamp and hook name."""
+    """
+    写入日志到文件，用于调试。
+
+    Args:
+        hook_name: hook 名称（如 SessionStart, UserPromptSubmit）
+        message: 日志消息内容
+    """
     timestamp = datetime.now().strftime("%H:%M:%S")
     with open(LOG_FILE, "a") as f:
         f.write(f"{timestamp} [{hook_name}] {message}\n")
 
 
 def run_tmux(*args: str) -> str:
-    """Run tmux command and return output."""
+    """
+    执行 tmux 命令并返回输出。
+
+    Args:
+        *args: tmux 命令参数，如 "list-panes", "-a"
+
+    Returns:
+        tmux 命令的标准输出，失败返回空字符串
+    """
     try:
         result = subprocess.run(
             ["tmux"] + list(args),
@@ -46,122 +67,88 @@ def run_tmux(*args: str) -> str:
         return ""
 
 
-def get_process_tree_pids(pid: int) -> set[int]:
-    """Get all PIDs in the process tree of given PID."""
-    pids = {pid}
+def get_pid_tty(pid: int) -> Optional[str]:
+    """
+    获取进程对应的 TTY 设备路径。
+
+    Args:
+        pid: 进程 PID
+
+    Returns:
+        TTY 路径（如 "/dev/pts/1"），失败返回 None
+    """
     try:
         result = subprocess.run(
-            ["ps", "--ppid", str(pid), "-o", "pid=", "--no-headers"],
+            ["ps", "-p", str(pid), "-o", "tty=", "--no-headers"],
             capture_output=True,
             text=True,
             timeout=2,
         )
-        for line in result.stdout.strip().split("\n"):
-            if line.strip():
-                child_pid = int(line.strip())
-                pids.update(get_process_tree_pids(child_pid))
-    except (subprocess.TimeoutExpired, ValueError, FileNotFoundError):
+        tty_name = result.stdout.strip()
+        if tty_name and tty_name != "?":
+            return f"/dev/{tty_name}"
+    except (subprocess.TimeoutExpired, FileNotFoundError):
         pass
-    return pids
+    return None
 
 
 def find_pane_by_pid(claude_pid: int) -> Optional[tuple[str, str, str]]:
-    """Find tmux pane containing Claude process by PID.
-
-    Returns (session_id, window_id, pane_id) or None.
     """
-    output = run_tmux("list-panes", "-a", "-F", "#{session_id} #{window_id} #{pane_id} #{pane_pid}")
+    根据 Claude 进程的 PID 找到它所在的 tmux pane。
+
+    通过比对进程的 TTY 和 pane 的 TTY 来定位。
+
+    Args:
+        claude_pid: Claude 进程的 PID
+
+    Returns:
+        (session_id, window_id, pane_id) 元组，找不到返回 None
+    """
+    # 获取 Claude 进程的 TTY
+    claude_tty = get_pid_tty(claude_pid)
+    if not claude_tty:
+        return None
+
+    # 获取所有 tmux panes 的 TTY 映射
+    output = run_tmux("list-panes", "-a", "-F", "#{session_id} #{window_id} #{pane_id} #{pane_tty}")
     if not output:
         return None
 
-    claude_tree = get_process_tree_pids(claude_pid)
-
+    # 找到 TTY 匹配的 pane
     for line in output.split("\n"):
         parts = line.strip().split()
         if len(parts) != 4:
             continue
-        session_id, window_id, pane_id, pane_pid_str = parts
-        try:
-            pane_pid = int(pane_pid_str)
-            if pane_pid in claude_tree or claude_pid in get_process_tree_pids(pane_pid):
-                return (session_id, window_id, pane_id)
-        except ValueError:
-            continue
+        session_id, window_id, pane_id, pane_tty = parts
+        if pane_tty == claude_tty:
+            return (session_id, window_id, pane_id)
+
     return None
 
 
-def get_last_prompt(pane_id: str) -> str:
-    """Extract recent user message from pane content as task summary."""
-    content = run_tmux("capture-pane", "-t", pane_id, "-p", "-S", "-300")
-    if not content:
-        return ""
-
-    lines = content.split("\n")
-
-    # Skip patterns for status/info lines
-    skip_patterns = [
-        r"^(In:|Out:|Cache|GLM|Context|Session|Running)",
-        r"[↓↑]\s*\d+\s*tokens",
-        r"\d+s\s*[··]",
-        r"^─+",
-        r"^╭|^╰",
-        r"accept edits",
-        r"shift\+tab",
-        r"^\s*\$",
-        r"^Next:",
-        r"^✶\s+实现",
-        r"^✽\s+实现",
-    ]
-
-    # Look for user input patterns (Chinese or meaningful text)
-    for line in reversed(lines):
-        line = line.strip()
-        if not line or len(line) < 5:
-            continue
-
-        # Skip status/info lines
-        should_skip = False
-        for pattern in skip_patterns:
-            if re.search(pattern, line, re.IGNORECASE):
-                should_skip = True
-                break
-        if should_skip:
-            continue
-
-        # Skip lines that start with special characters
-        if line.startswith(("⎿", "✶", "✽", "❯", "$ ", "●", "○", "◦", "⏺")):
-            continue
-
-        # Skip if line is mostly special chars
-        special_chars = sum(1 for c in line if c in "─╭╰│├┤┬┴┼⎿✶✽❯●○◦⏺")
-        if special_chars > len(line) * 0.3:
-            continue
-
-        # Check if line has Chinese characters or looks like a question/task
-        has_chinese = bool(re.search(r"[一-鿿]", line))
-        is_question = "?" in line or "？" in line
-        is_long = len(line) > 10
-
-        if has_chinese or is_question or is_long:
-            return line[:80]
-
-    return ""
-
-
 def with_lock(func):
-    """Decorator to acquire file lock before operation."""
+    """
+    装饰器：在执行函数前获取文件锁，防止并发写入状态文件。
+
+    用法：@with_lock
+    """
     def wrapper(*args, **kwargs):
         with open(LOCK_FILE, "w") as lockf:
-            fcntl.flock(lockf.fileno(), fcntl.LOCK_EX)
+            fcntl.flock(lockf.fileno(), fcntl.LOCK_EX)  # 获取排他锁
             try:
                 return func(*args, **kwargs)
             finally:
-                fcntl.flock(lockf.fileno(), fcntl.LOCK_UN)
+                fcntl.flock(lockf.fileno(), fcntl.LOCK_UN)  # 释放锁
     return wrapper
 
 
 def load_state() -> dict:
-    """Load state from JSON file."""
+    """
+    从 JSON 文件加载会话状态。
+
+    Returns:
+        状态字典，格式为 {"sessions": {key: session_info}, "updated_at": "..."}
+    """
     if not STATE_FILE.exists():
         return {"sessions": {}, "updated_at": ""}
     try:
@@ -171,30 +158,54 @@ def load_state() -> dict:
 
 
 def save_state(state: dict):
-    """Save state to JSON file."""
+    """
+    保存状态到 JSON 文件。
+
+    Args:
+        state: 要保存的状态字典
+    """
     state["updated_at"] = datetime.now().isoformat()
     STATE_FILE.write_text(json.dumps(state, indent=2, ensure_ascii=False))
 
 
 def make_key(session_id: str, window_id: str, pane_id: str) -> str:
-    """Create unique key for session."""
+    """
+    生成会话的唯一标识键。
+
+    Returns:
+        格式如 "session_name:window_id:pane_id"
+    """
     return f"{session_id}:{window_id}:{pane_id}"
 
 
 def find_session_by_pid(state: dict, claude_pid: int) -> Optional[str]:
-    """Find session key by Claude PID."""
+    """
+    根据 Claude PID 在状态中查找对应的会话键。
+
+    Returns:
+        会话键，找不到返回 None
+    """
     for key, session in state["sessions"].items():
         if session.get("claude_pid") == claude_pid:
             return key
     return None
 
 
+
 @with_lock
 def cmd_start(pid: int):
-    """Register session, mark as idle (waiting for user input)."""
+    """
+    [Hook: SessionStart] 注册新会话，初始状态设为 idle。
+
+    这个命令在 Claude Code 启动时被调用。
+
+    Args:
+        pid: Claude 进程的 PID
+    """
     log("SessionStart", f"start called with pid={pid}")
     state = load_state()
 
+    # 根据 PID 找到对应的 tmux pane
     location = find_pane_by_pid(pid)
     if not location:
         log("SessionStart", f"ERROR: Could not find pane for PID {pid}")
@@ -205,12 +216,13 @@ def cmd_start(pid: int):
     new_key = make_key(session_id, window_id, pane_id)
     log("SessionStart", f"Found location: {new_key}")
 
-    # Check if PID already exists with different location
+    # 如果该 PID 已存在但位置变了，删除旧记录
     old_key = find_session_by_pid(state, pid)
     if old_key and old_key != new_key:
         log("SessionStart", f"Location changed from {old_key} to {new_key}")
         del state["sessions"][old_key]
 
+    # 创建新会话记录
     now = datetime.now().isoformat()
     if new_key not in state["sessions"]:
         state["sessions"][new_key] = {
@@ -218,11 +230,10 @@ def cmd_start(pid: int):
             "window_id": window_id,
             "pane_id": pane_id,
             "claude_pid": pid,
-            "status": "idle",
-            "last_prompt": get_last_prompt(pane_id),
-            "started_at": now,
+            "status": "idle",           # 初始状态为空闲
+            "last_prompt": "",          # 初始为空，等待用户输入
             "updated_at": now,
-            "turns": 0,
+            "turns": 0,                 # 对话轮次计数
         }
 
     save_state(state)
@@ -231,8 +242,15 @@ def cmd_start(pid: int):
 
 @with_lock
 def cmd_running(pid: int):
-    """Mark session as running (agent is working)."""
-    # Read prompt from stdin (hook passes JSON via stdin)
+    """
+    [Hook: UserPromptSubmit] 标记会话为 running（Claude 正在工作）。
+
+    这个命令在用户提交消息后被调用。Hook 会通过 stdin 传入 JSON 数据。
+
+    Args:
+        pid: Claude 进程的 PID
+    """
+    # 从 stdin 读取 hook 传入的 JSON 数据（包含用户输入的 prompt）
     prompt = ""
     try:
         if not sys.stdin.isatty():
@@ -259,7 +277,14 @@ def cmd_running(pid: int):
 
 @with_lock
 def cmd_completed(pid: int):
-    """Mark session as completed (task done, waiting for user review)."""
+    """
+    [Hook: Stop] 标记会话为 completed（任务完成，等待用户确认）。
+
+    这个命令在 Claude 完成一个任务后被调用。
+
+    Args:
+        pid: Claude 进程的 PID
+    """
     log("Stop", f"completed called with pid={pid}")
     state = load_state()
     key = find_session_by_pid(state, pid)
@@ -274,7 +299,14 @@ def cmd_completed(pid: int):
 
 @with_lock
 def cmd_remove(pid: int):
-    """Remove session record by PID."""
+    """
+    [Hook: SessionEnd] 删除会话记录。
+
+    这个命令在 Claude Code 会话结束时被调用。
+
+    Args:
+        pid: Claude 进程的 PID
+    """
     log("SessionEnd", f"remove called with pid={pid}")
     state = load_state()
     key = find_session_by_pid(state, pid)
@@ -288,7 +320,12 @@ def cmd_remove(pid: int):
 
 @with_lock
 def cmd_remove_pane(pane_id: str):
-    """Remove session record for pane."""
+    """
+    根据 pane ID 删除会话记录。
+
+    Args:
+        pane_id: tmux pane ID（如 %0）
+    """
     state = load_state()
     keys_to_remove = [
         k for k, s in state["sessions"].items()
@@ -301,7 +338,11 @@ def cmd_remove_pane(pane_id: str):
 
 
 def cmd_status():
-    """Output status bar content."""
+    """
+    输出状态栏内容，格式如 "🤖2 ✅1 💤3"。
+
+    用于在 tmux 状态栏中显示。
+    """
     state = load_state()
     counts = {"running": 0, "completed": 0, "idle": 0}
     for session in state["sessions"].values():
@@ -319,24 +360,30 @@ def cmd_status():
 
 @with_lock
 def cmd_list():
-    """List all sessions as JSON."""
+    """以 JSON 格式输出所有会话信息。"""
     state = load_state()
     print(json.dumps(state["sessions"], indent=2, ensure_ascii=False))
 
 
 @with_lock
 def cmd_clear():
-    """Clear all records."""
+    """清空所有会话记录。"""
     save_state({"sessions": {}, "updated_at": ""})
     print("Cleared all records")
 
 
 @with_lock
 def cmd_clean():
-    """Clean up stale records (panes or processes that no longer exist)."""
+    """
+    清理过期的会话记录。
+
+    删除以下情况的记录：
+    1. pane 已经不存在
+    2. Claude 进程已经终止
+    """
     state = load_state()
 
-    # Get all existing panes
+    # 获取所有存在的 panes
     output = run_tmux("list-panes", "-a", "-F", "#{pane_id}")
     existing_panes = set(output.split("\n")) if output else set()
 
@@ -345,15 +392,15 @@ def cmd_clean():
         pane_id = session.get("pane_id", "")
         claude_pid = session.get("claude_pid", 0)
 
-        # Check if pane no longer exists
+        # 检查 pane 是否还存在
         if pane_id not in existing_panes:
             keys_to_remove.append(key)
             continue
 
-        # Check if Claude process is dead
+        # 检查 Claude 进程是否还活着
         if claude_pid:
             try:
-                os.kill(claude_pid, 0)  # Check if process exists
+                os.kill(claude_pid, 0)  # 发送信号 0 不会真的杀死进程，只是检查是否存在
             except (OSError, ProcessLookupError):
                 keys_to_remove.append(key)
 
@@ -367,8 +414,14 @@ def cmd_clean():
         print("No stale records found")
 
 
+
 def cmd_tui():
-    """Launch TUI."""
+    """
+    启动 TUI（终端用户界面）。
+
+    使用 textual 库构建交互式界面，显示所有会话状态。
+    支持键盘导航、跳转到对应 pane 等操作。
+    """
     try:
         from textual.app import App
         from textual.widgets import Header, Footer, Static
@@ -379,6 +432,16 @@ def cmd_tui():
         sys.exit(1)
 
     class ClaudeWatcherApp(App):
+        """
+        Claude Watcher 的 TUI 应用类。
+
+        显示所有会话列表，支持：
+        - 上/下键或 u/e 键导航
+        - Enter 键跳转到对应 tmux pane
+        - r 键刷新
+        - c 键清理过期记录
+        - q/Esc 键退出
+        """
         CSS = """
         Screen {
             layout: vertical;
@@ -403,6 +466,7 @@ def cmd_tui():
             super().__init__()
             self.theme = "ansi-dark"
 
+        # 键盘快捷键绑定
         BINDINGS = [
             ("u", "up", "Up"),
             ("e", "down", "Down"),
@@ -415,16 +479,18 @@ def cmd_tui():
             ("escape", "quit", "Quit"),
         ]
 
+        # 响应式变量：选中索引和会话列表
         selected_index = reactive(0)
         sessions = reactive([])
 
         def compose(self):
+            """构建界面布局：Header + 会话列表容器 + Footer"""
             yield Header()
             yield Container(id="sessions")
             yield Footer()
 
         def get_title(self) -> str:
-            """Generate title with status counts."""
+            """生成标题，包含各状态的数量统计。"""
             state = load_state()
             counts = {"running": 0, "completed": 0, "idle": 0}
             for session in state["sessions"].values():
@@ -443,14 +509,16 @@ def cmd_tui():
             return "Claude Watcher" + (" · " + " · ".join(parts) if parts else "")
 
         def on_mount(self):
+            """界面启动时初始化：设置标题、刷新列表、启动定时刷新。"""
             self.title = self.get_title()
             self.refresh_sessions()
-            self.set_interval(2, self.refresh_sessions)
+            self.set_interval(1, self.refresh_sessions)  # 每 1 秒刷新一次
 
         def refresh_sessions(self):
+            """刷新会话列表显示。"""
             self.title = self.get_title()
             state = load_state()
-            # Sort by updated_at, most recent first
+            # 按更新时间倒序排列
             self.sessions = sorted(
                 state["sessions"].items(),
                 key=lambda x: x[1].get("updated_at", ""),
@@ -460,17 +528,18 @@ def cmd_tui():
             container = self.query_one("#sessions")
             container.remove_children()
 
-            # Show empty state if no sessions
+            # 无会话时显示提示
             if not self.sessions:
                 container.mount(Static("当前 tmux 中没有 agent 会话", classes="empty-message"))
                 return
 
+            # 渲染每个会话
             for i, (key, session) in enumerate(self.sessions):
                 sid = session.get("session_id", "").lstrip("$")
                 wid = session.get("window_id", "").lstrip("@")
                 pane_id = session.get("pane_id", "").lstrip("%")
 
-                # Get names by looking up pane_id in list-panes output
+                # 从 tmux 获取 session 名称、当前命令、当前路径
                 raw_pane_id = session.get("pane_id", "")
                 pane_list = run_tmux("list-panes", "-a", "-F", "#{pane_id} #{session_name} #{pane_current_command} #{pane_current_path}")
                 session_name, pane_name, cwd = "?", "?", ""
@@ -481,8 +550,8 @@ def cmd_tui():
                         cwd = parts[3] if len(parts) == 4 else ""
                         break
 
+                # 缩短路径显示
                 if cwd:
-                    # Shorten path: show last 2 directories
                     cwd_parts = cwd.split("/")
                     if len(cwd_parts) > 2:
                         cwd = "/".join(cwd_parts[-2:])
@@ -490,41 +559,37 @@ def cmd_tui():
 
                 status = session.get("status", "idle")
                 icon = STATUS_ICONS.get(status, "?")
-                # Use stored prompt (from hook), fallback to pane parsing
-                summary = session.get("last_prompt", "") or get_last_prompt(raw_pane_id)
+                summary = session.get("last_prompt", "")
                 turns = session.get("turns", 0)
 
-                # Calculate time info
+                # 计算时间信息（距离上次更新的时长）
                 updated = session.get("updated_at", "")
-                started = session.get("started_at", "")
                 time_info = ""
-                try:
-                    if status == "running" and started:
-                        # Show running duration
-                        start_dt = datetime.fromisoformat(started)
-                        delta = datetime.now() - start_dt
-                        secs = int(delta.total_seconds())
-                        if secs < 60:
-                            time_info = f"running {secs}s"
-                        elif secs < 3600:
-                            time_info = f"running {secs // 60}m {secs % 60}s"
-                        else:
-                            time_info = f"running {secs // 3600}h"
-                    elif updated:
-                        # Show inactive time (time since last update)
+                if updated:
+                    try:
                         dt = datetime.fromisoformat(updated)
                         delta = datetime.now() - dt
                         secs = int(delta.total_seconds())
-                        if secs < 60:
-                            time_info = f"inactive {secs}s"
-                        elif secs < 3600:
-                            time_info = f"inactive {secs // 60}m"
+                        if status == "running":
+                            # 运行中：显示已运行时长
+                            if secs < 60:
+                                time_info = f"running {secs}s"
+                            elif secs < 3600:
+                                time_info = f"running {secs // 60}m {secs % 60}s"
+                            else:
+                                time_info = f"running {secs // 3600}h"
                         else:
-                            time_info = f"inactive {secs // 3600}h"
-                except ValueError:
-                    pass
+                            # 空闲/完成：显示距离上次活动时长
+                            if secs < 60:
+                                time_info = f"inactive {secs}s"
+                            elif secs < 3600:
+                                time_info = f"inactive {secs // 60}m"
+                            else:
+                                time_info = f"inactive {secs // 3600}h"
+                    except ValueError:
+                        pass
 
-                # Truncate summary to ~40 chars (half of typical terminal width)
+                # 截断摘要
                 max_len = 40
                 if len(summary) > max_len:
                     summary = summary[:max_len] + "..."
@@ -535,31 +600,35 @@ def cmd_tui():
                 container.mount(Static(text, classes=css_class))
 
         def action_up(self):
+            """向上移动选中。"""
             if self.selected_index > 0:
                 self.selected_index -= 1
                 self.refresh_sessions()
 
         def action_down(self):
+            """向下移动选中。"""
             if self.selected_index < len(self.sessions) - 1:
                 self.selected_index += 1
                 self.refresh_sessions()
 
         def action_focus_pane(self):
+            """跳转到选中的 tmux pane。"""
             if 0 <= self.selected_index < len(self.sessions):
                 _, session = self.sessions[self.selected_index]
                 pane_id = session.get("pane_id", "")
                 window_id = session.get("window_id", "")
                 if pane_id and window_id:
-                    # Exit TUI first
                     self.exit()
-                    # Select window then pane after popup closes
+                    # 先选窗口再选 pane
                     subprocess.run(["tmux", "run-shell", "-b", f"tmux select-window -t {window_id} && tmux select-pane -t {pane_id}"])
 
         def action_clean(self):
+            """清理过期记录并刷新。"""
             cmd_clean()
             self.refresh_sessions()
 
         def action_refresh(self):
+            """手动刷新。"""
             self.refresh_sessions()
 
     app = ClaudeWatcherApp()
@@ -567,58 +636,46 @@ def cmd_tui():
 
 
 def main():
+    """命令行入口：解析参数并调用对应命令。"""
     parser = argparse.ArgumentParser(description="Claude Watcher")
     subparsers = parser.add_subparsers(dest="command", help="Commands")
 
-    # start command
-    p_start = subparsers.add_parser("start", help="Register session (idle)")
-    p_start.add_argument("--pid", type=int, required=True, help="Claude process PID")
+    # ========== 定义命令行参数 ==========
 
-    # running command
-    p_running = subparsers.add_parser("running", help="Mark as running")
-    p_running.add_argument("--pid", type=int, required=True, help="Claude process PID")
+    # Hook 命令（由 Claude Code hooks 调用）
+    subparsers.add_parser("start", help="Register session (idle)").add_argument("--pid", type=int, required=True)
+    subparsers.add_parser("running", help="Mark as running").add_argument("--pid", type=int, required=True)
+    subparsers.add_parser("completed", help="Mark as completed").add_argument("--pid", type=int, required=True)
+    subparsers.add_parser("remove", help="Remove record by PID").add_argument("--pid", type=int, required=True)
+    subparsers.add_parser("remove-pane", help="Remove pane record").add_argument("pane_id")
 
-    # completed command
-    p_completed = subparsers.add_parser("completed", help="Mark as completed")
-    p_completed.add_argument("--pid", type=int, required=True, help="Claude process PID")
-
-    # remove-pane command
-    p_remove = subparsers.add_parser("remove-pane", help="Remove pane record")
-    p_remove.add_argument("pane_id", help="Pane ID to remove")
-
-    # remove command
-    p_remove_pid = subparsers.add_parser("remove", help="Remove record by PID")
-    p_remove_pid.add_argument("--pid", type=int, required=True, help="Claude process PID")
-
-    # Other commands
+    # 用户命令
     subparsers.add_parser("status", help="Output status bar content")
     subparsers.add_parser("list", help="List all sessions")
     subparsers.add_parser("clear", help="Clear all records")
     subparsers.add_parser("clean", help="Clean stale records")
     subparsers.add_parser("tui", help="Launch TUI")
 
+    # ========== 解析并执行 ==========
+
     args = parser.parse_args()
 
-    if args.command == "start":
-        cmd_start(args.pid)
-    elif args.command == "running":
-        cmd_running(args.pid)
-    elif args.command == "completed":
-        cmd_completed(args.pid)
-    elif args.command == "remove":
-        cmd_remove(args.pid)
-    elif args.command == "remove-pane":
-        cmd_remove_pane(args.pane_id)
-    elif args.command == "status":
-        cmd_status()
-    elif args.command == "list":
-        cmd_list()
-    elif args.command == "clear":
-        cmd_clear()
-    elif args.command == "clean":
-        cmd_clean()
-    elif args.command == "tui":
-        cmd_tui()
+    # 命令到函数的映射
+    commands = {
+        "start": lambda: cmd_start(args.pid),
+        "running": lambda: cmd_running(args.pid),
+        "completed": lambda: cmd_completed(args.pid),
+        "remove": lambda: cmd_remove(args.pid),
+        "remove-pane": lambda: cmd_remove_pane(args.pane_id),
+        "status": cmd_status,
+        "list": cmd_list,
+        "clear": cmd_clear,
+        "clean": cmd_clean,
+        "tui": cmd_tui,
+    }
+
+    if args.command in commands:
+        commands[args.command]()
     else:
         parser.print_help()
 
