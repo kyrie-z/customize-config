@@ -11,17 +11,17 @@ colorscheme OceanicNext
 " ============================== vim set ==============================
 
 set backspace=indent,eol,start          " 使回格键（backspace）正常处理indent, eol, start等
-set wildmenu	    " 命令以菜单形式显示
-set nobackup	    " 不创建交换文件
+set wildmenu        " 命令以菜单形式显示
+set nobackup        " 不创建交换文件
 set noswapfile      " no .swp file
-set autoread	    " 文件别其他程序修改时发出提示
+set autoread        " 文件别其他程序修改时发出提示
 set statusline+=%F  " 显示当前文件绝对路径
 set mouse+=a
 set nu
-set showcmd	    " 底部显示正在输入的指令
-set scrolloff=5	    " 留行
-set cursorline	    " 行高亮显示
-set ruler	    " 底部显示当前行列
+set showcmd         " 底部显示正在输入的指令
+set scrolloff=5     " 留行
+set cursorline      " 行高亮显示
+set ruler           " 底部显示当前行列
 set laststatus=2    " 显示状态栏
 set showtabline=2
 
@@ -43,7 +43,7 @@ let &t_TE = ""
 " ============================== vim key map ==============================
 
 " install vim-athena
-vnoremap y "+y	    " +y 复制到系统粘贴板上
+" vnoremap y "+y      " +y 复制到系统粘贴板上
 
 nmap <C-a> <Home>
 nmap <C-e> <End>
@@ -79,6 +79,7 @@ Plug 'majutsushi/tagbar'
 Plug 'itchyny/vim-cursorword'
 Plug 'itchyny/lightline.vim'
 Plug 'mengelbrecht/lightline-bufferline'
+Plug 'Yggdroot/LeaderF', { 'do': './install.sh' }
 call plug#end()
 
 "---------- lightline
@@ -117,4 +118,41 @@ nmap <F3> :TagbarToggle<CR>
 "---------- vim-cursorword
  let g:cursorword_delay = 0  "禁止同单词移动闪烁
 
+			 \
 
+"---------- vim-cursorword
+" 快捷键前缀
+let g:Lf_ShortcutF = '<leader>ff'
+let g:Lf_ShortcutB = '<leader>fb'
+
+" 弹窗位置及大小
+let g:Lf_WindowPosition = 'popup'
+let g:Lf_PreviewInPopup = 1
+let g:Lf_StlSeparator = { 'left': '', 'right': '', 'font': '' }
+
+" 忽略特定文件或文件夹
+let g:Lf_WildIgnore = {
+            \ 'dir': ['.git', '.svn', 'node_modules', 'dist'],
+            \ 'file': ['*.swp', '*.zip', '*.png', '*.jpg']
+            \ }
+
+" 使用 ripgrep 作为默认外部查找工具
+let g:Lf_DefaultExternalTool = 'rg'
+
+" 自定义快捷键映射
+noremap <leader>fm :Leaderf mru<CR>
+noremap <leader>ft :Leaderf buf<CR>
+noremap <leader>fl :Leaderf line<CR>
+noremap <leader>fr :Leaderf rg<CR>
+
+
+
+
+" ============================== 注释样式 ==============================
+" 注释无背景色，字体颜色变浅
+hi Comment cterm=NONE ctermbg=NONE ctermfg=102
+" 如果使用 GUI/true color，取消下行注释
+" hi Comment gui=NONE guibg=NONE guifg=#6a7b8b
+
+
+highlight Normal guibg=NONE ctermbg=NONE
