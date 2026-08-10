@@ -1,0 +1,59 @@
+#!/bin/bash
+
+pp() {
+    if [ -z "$1" ]; then
+        echo "用法: pp <PID>"
+        return 1
+    fi
+    local pid="$1"
+
+    # 检查进程是否存在
+    if [ ! -d "/proc/$pid" ]; then
+        echo "进程 $pid 不存在"
+        return 1
+    fi
+
+    # 获取信息
+    local info=$(ps -p "$pid" -o pid,ppid,user,%cpu,etime,rss,comm --no-headers 2>/dev/null)
+    local exe=$(readlink /proc/$pid/exe 2>/dev/null)
+    local cwd=$(readlink /proc/$pid/cwd 2>/dev/null)
+    local args=$(tr "\0" " " < /proc/$pid/cmdline 2>/dev/null)
+    local chain=$(pstree -p -s "$pid" 2>/dev/null | head -n1)
+
+    # 解析运行时间 (etime 格式: [[dd-]hh:]mm:ss)
+    local etime=$(echo "$info" | awk "{print \$5}")
+    local time_str=""
+    if [[ "$etime" =~ ^([0-9]+)-([0-9]+):([0-9]+):([0-9]+)$ ]]; then
+        time_str="${BASH_REMATCH[1]}d ${BASH_REMATCH[2]}h ${BASH_REMATCH[3]}min"
+    elif [[ "$etime" =~ ^([0-9]+):([0-9]+):([0-9]+)$ ]]; then
+        time_str="${BASH_REMATCH[1]}h ${BASH_REMATCH[2]}min"
+    elif [[ "$etime" =~ ^([0-9]+):([0-9]+)$ ]]; then
+        time_str="${BASH_REMATCH[1]}min ${BASH_REMATCH[2]}s"
+    else
+        time_str="$etime"
+    fi
+
+    # CPU 占用
+    local cpu=$(echo "$info" | awk "{print \$4}")
+
+    # 内存 (rss 单位是 KB，转换为 MB)
+    local rss_kb=$(echo "$info" | awk "{print \$6}")
+    local mem_mb=$(echo "scale=1; $rss_kb / 1024" | bc)
+
+    # 输出
+    echo ""
+    echo "  PID:      $pid"
+    echo "  名称:     $(echo "$info" | awk "{print \$7}")"
+    echo "  用户:     $(echo "$info" | awk "{print \$3}")"
+    echo "  父进程:   $(echo "$info" | awk "{print \$2}")"
+    echo "  进程链:   $chain"
+    echo "  运行时间: $time_str"
+    echo "  CPU:      ${cpu}%"
+    echo "  内存:     ${mem_mb} MB"
+    echo "  路径:     ${exe:-无法获取}"
+    echo "  工作目录: ${cwd:-无法获取}"
+    echo "  命令行:   ${args:-无法获取}"
+    echo ""
+}
+
+pp "$1"
