@@ -38,6 +38,13 @@ def get_targets(project_root: Path) -> list[DeployTarget]:
                 "script": str(home / ".config" / "tmux" / "script"),
             }
         ),
+        DeployTarget(
+            name="gdb",
+            source_dir=project_root / "gdb",
+            deploy_map={
+                ".gdbinit": str(home / ".gdbinit"),
+            }
+        ),
     ]
     return targets
 
